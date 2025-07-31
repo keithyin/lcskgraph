@@ -34,11 +34,11 @@
 //! // z differs from x and y's partial order alignment by 1 base
 //! assert_eq!(aligner.global(z).alignment().score, 5);
 //! ```
-use std::cmp::{max, Ordering};
 use petgraph::graph::NodeIndex;
 use petgraph::visit::Topo;
-use std::mem;
 use petgraph::{Directed, Graph, Incoming};
+use std::cmp::{max, Ordering};
+use std::mem;
 
 pub const MIN_SCORE: i32 = -858_993_459; // negative infinity; see alignment/pairwise/mod.rs
 pub type POAGraph = Graph<u8, i32, Directed, usize>;
@@ -289,21 +289,50 @@ pub struct Aligner {
     pub poa: Poa,
 }
 
-impl Aligner{
+impl Aligner {
     /// Create new instance.
-    pub fn empty (match_score: i32, mismatch_score: i32, gap_open_score: i32, x_clip: i32, y_clip: i32, _band_size: i32) -> Self {
+    pub fn empty(
+        match_score: i32,
+        mismatch_score: i32,
+        gap_open_score: i32,
+        x_clip: i32,
+        y_clip: i32,
+        _band_size: i32,
+    ) -> Self {
         let reference = &vec![65];
         Aligner {
             traceback: Traceback::new(),
             query: reference.to_vec(),
-            poa: Poa::from_string(match_score, mismatch_score, gap_open_score, x_clip, y_clip, reference),
+            poa: Poa::from_string(
+                match_score,
+                mismatch_score,
+                gap_open_score,
+                x_clip,
+                y_clip,
+                reference,
+            ),
         }
     }
-    pub fn new(match_score: i32, mismatch_score: i32, gap_open_score: i32, reference: &Vec<u8>, x_clip: i32, y_clip: i32, _band_size: i32) -> Self {
+    pub fn new(
+        match_score: i32,
+        mismatch_score: i32,
+        gap_open_score: i32,
+        reference: &Vec<u8>,
+        x_clip: i32,
+        y_clip: i32,
+        _band_size: i32,
+    ) -> Self {
         Aligner {
             traceback: Traceback::new(),
             query: reference.to_vec(),
-            poa: Poa::from_string(match_score, mismatch_score, gap_open_score, x_clip, y_clip, reference),
+            poa: Poa::from_string(
+                match_score,
+                mismatch_score,
+                gap_open_score,
+                x_clip,
+                y_clip,
+                reference,
+            ),
         }
     }
 
@@ -322,10 +351,7 @@ impl Aligner{
     /// Globally align a given query against the graph.
     pub fn global(&mut self, query: &Vec<u8>) -> &mut Self {
         // Store the current clip penalties
-        let clip_penalties = [
-            self.poa.x_clip,
-            self.poa.y_clip,
-        ];
+        let clip_penalties = [self.poa.x_clip, self.poa.y_clip];
 
         // Temporarily Over-write the clip penalties
         self.poa.x_clip = MIN_SCORE;
@@ -344,10 +370,7 @@ impl Aligner{
     /// Semi-globally align a given query against the graph.
     pub fn semiglobal(&mut self, query: &Vec<u8>) -> &mut Self {
         // Store the current clip penalties
-        let clip_penalties = [
-            self.poa.x_clip,
-            self.poa.y_clip,
-        ];
+        let clip_penalties = [self.poa.x_clip, self.poa.y_clip];
 
         // Temporarily Over-write the clip penalties
         self.poa.x_clip = MIN_SCORE;
@@ -365,10 +388,7 @@ impl Aligner{
     /// Locally align a given query against the graph.
     pub fn local(&mut self, query: &Vec<u8>) -> &mut Self {
         // Store the current clip penalties
-        let clip_penalties = [
-            self.poa.x_clip,
-            self.poa.y_clip,
-        ];
+        let clip_penalties = [self.poa.x_clip, self.poa.y_clip];
 
         // Temporarily Over-write the clip penalties
         self.poa.x_clip = 0;
@@ -391,12 +411,14 @@ impl Aligner{
         self
     }
     /// Globally align a given query against the graph.
-    pub fn global_banded(&mut self, query: &Vec<u8>, lcsk_path: &Vec<(usize, usize)>, bandwidth: usize) -> &mut Self {
+    pub fn global_banded(
+        &mut self,
+        query: &Vec<u8>,
+        lcsk_path: &Vec<(usize, usize)>,
+        bandwidth: usize,
+    ) -> &mut Self {
         // Store the current clip penalties
-        let clip_penalties = [
-            self.poa.x_clip,
-            self.poa.y_clip,
-        ];
+        let clip_penalties = [self.poa.x_clip, self.poa.y_clip];
 
         // Temporarily Over-write the clip penalties
         self.poa.x_clip = MIN_SCORE;
@@ -413,12 +435,14 @@ impl Aligner{
     }
 
     /// Semi-globally align a given query against the graph.
-    pub fn semiglobal_banded(&mut self, query: &Vec<u8>, lcsk_path: &Vec<(usize, usize)>, bandwidth: usize) -> &mut Self {
+    pub fn semiglobal_banded(
+        &mut self,
+        query: &Vec<u8>,
+        lcsk_path: &Vec<(usize, usize)>,
+        bandwidth: usize,
+    ) -> &mut Self {
         // Store the current clip penalties
-        let clip_penalties = [
-            self.poa.x_clip,
-            self.poa.y_clip,
-        ];
+        let clip_penalties = [self.poa.x_clip, self.poa.y_clip];
 
         // Temporarily Over-write the clip penalties
         self.poa.x_clip = MIN_SCORE;
@@ -434,12 +458,14 @@ impl Aligner{
     }
 
     /// Locally align a given query against the graph.
-    pub fn local_banded(&mut self, query: &Vec<u8>, lcsk_path: &Vec<(usize, usize)>, bandwidth: usize) -> &mut Self {
+    pub fn local_banded(
+        &mut self,
+        query: &Vec<u8>,
+        lcsk_path: &Vec<(usize, usize)>,
+        bandwidth: usize,
+    ) -> &mut Self {
         // Store the current clip penalties
-        let clip_penalties = [
-            self.poa.x_clip,
-            self.poa.y_clip,
-        ];
+        let clip_penalties = [self.poa.x_clip, self.poa.y_clip];
 
         // Temporarily Over-write the clip penalties
         self.poa.x_clip = 0;
@@ -456,16 +482,29 @@ impl Aligner{
     }
 
     /// Custom align a given query against the graph with custom xclip and yclip penalties.
-    pub fn custom_banded(&mut self, query: &Vec<u8>, lcsk_path: &Vec<(usize, usize)>, bandwidth: usize) -> &mut Self {
+    pub fn custom_banded(
+        &mut self,
+        query: &Vec<u8>,
+        lcsk_path: &Vec<(usize, usize)>,
+        bandwidth: usize,
+    ) -> &mut Self {
         self.query = query.to_vec();
         self.traceback = self.poa.custom_banded(query, lcsk_path, bandwidth);
         self
     }
 
-    pub fn custom_banded_threaded(&mut self, query: &Vec<u8>, lcsk_path: &Vec<(usize, usize)>, bandwidth: usize, section_graph: Graph<u8, i32, Directed, usize>) -> &mut Self {
+    pub fn custom_banded_threaded(
+        &mut self,
+        query: &Vec<u8>,
+        lcsk_path: &Vec<(usize, usize)>,
+        bandwidth: usize,
+        section_graph: Graph<u8, i32, Directed, usize>,
+    ) -> &mut Self {
         self.poa.graph = section_graph;
         self.query = query.to_vec();
-        self.traceback = self.poa.custom_banded_threaded_section(query, lcsk_path, bandwidth);
+        self.traceback = self
+            .poa
+            .custom_banded_threaded_section(query, lcsk_path, bandwidth);
         self
     }
     /// Return alignment graph.
@@ -531,15 +570,21 @@ pub struct Poa {
     pub memory_usage: usize,
 }
 
-impl Poa{
-
+impl Poa {
     /// Create a new POA graph from an initial reference sequence and alignment penalties.
     ///
     /// # Arguments
     ///
     /// * `scoring` - the score struct
     /// * `reference` - a reference TextSlice to populate the initial reference graph
-    pub fn from_string(match_score: i32, mismatch_score: i32, gap_open_score: i32, x_clip: i32, y_clip: i32, seq: &Vec<u8>) -> Self {
+    pub fn from_string(
+        match_score: i32,
+        mismatch_score: i32,
+        gap_open_score: i32,
+        x_clip: i32,
+        y_clip: i32,
+        seq: &Vec<u8>,
+    ) -> Self {
         let mut graph: Graph<u8, i32, Directed, usize> =
             Graph::with_capacity(seq.len(), seq.len() - 1);
         let mut prev: NodeIndex<usize> = graph.add_node(seq[0]);
@@ -549,7 +594,15 @@ impl Poa{
             graph.add_edge(prev, node, 1);
             prev = node;
         }
-        Poa { match_score: match_score, mismatch_score: mismatch_score, gap_open_score: gap_open_score, x_clip: x_clip, y_clip: y_clip, graph, memory_usage: 0}
+        Poa {
+            match_score: match_score,
+            mismatch_score: mismatch_score,
+            gap_open_score: gap_open_score,
+            x_clip: x_clip,
+            y_clip: y_clip,
+            graph,
+            memory_usage: 0,
+        }
     }
     /// A global Needleman-Wunsch aligner on partially ordered graphs.
     ///
@@ -574,14 +627,7 @@ impl Poa{
             // iterate over the predecessors of this node
             let prevs: Vec<NodeIndex<usize>> =
                 self.graph.neighbors_directed(node, Incoming).collect();
-            traceback.new_row(
-                i,
-                n + 1,
-                self.gap_open_score,
-                self.x_clip,
-                0,
-                n + 1,
-            );
+            traceback.new_row(i, n + 1, self.gap_open_score, self.x_clip, 0, n + 1);
             total_cell_usage += n + 1;
             // query base and its index in the DAG (traceback matrix rows)
             for (query_index, query_base) in query.iter().enumerate() {
@@ -591,8 +637,7 @@ impl Poa{
                     let temp_score;
                     if r == *query_base {
                         temp_score = self.match_score;
-                    }
-                    else {
+                    } else {
                         temp_score = self.mismatch_score;
                     }
                     TracebackCell {
@@ -615,16 +660,14 @@ impl Poa{
                         let temp_score;
                         if r == *query_base {
                             temp_score = self.match_score;
-                        }
-                        else {
+                        } else {
                             temp_score = self.mismatch_score;
                         }
                         max_cell = max(
                             max_cell,
                             max(
                                 TracebackCell {
-                                    score: traceback.get(i_p, j - 1).score
-                                        + temp_score,
+                                    score: traceback.get(i_p, j - 1).score + temp_score,
                                     op: AlignmentOperation::Match(Some((i_p - 1, i - 1))),
                                 },
                                 TracebackCell {
@@ -685,7 +728,7 @@ impl Poa{
         //println!("Total {}KB", (total_cell_usage * mem::size_of::<TracebackCell>()) / 1024);
         traceback
     }
-    
+
     /// Experimental: return sequence of traversed edges
     ///
     /// Only supports alignments for sequences that have already been added,
@@ -716,7 +759,12 @@ impl Poa{
         path
     }
 
-    pub fn custom_banded(&mut self, query: &Vec<u8>, lcsk_path: &Vec<(usize, usize)>, bandwidth: usize) -> Traceback {
+    pub fn custom_banded(
+        &mut self,
+        query: &Vec<u8>,
+        lcsk_path: &Vec<(usize, usize)>,
+        bandwidth: usize,
+    ) -> Traceback {
         assert!(self.graph.node_count() != 0);
         // dimensions of the traceback matrix
         let (m, n) = (self.graph.node_count(), query.len());
@@ -740,7 +788,7 @@ impl Poa{
             start_banding_query_node = lcsk_path[0];
             end_banding_query_node = lcsk_path.last().unwrap();
         }
-        
+
         while let Some(node) = topo.next(&self.graph) {
             // reference base and index
             let r = self.graph.raw_nodes()[node.index()].weight; // reference base at previous index
@@ -756,16 +804,14 @@ impl Poa{
                 if banding_started == false {
                     //do banding till start_banding_query_node + bandwidth
                     end = start_banding_query_node.0 + bandwidth;
-                }
-                else if banding_ended == true {
+                } else if banding_ended == true {
                     // do banding till till end of table
                     start = if bandwidth > end_banding_query_node.0 {
                         0
                     } else {
                         end_banding_query_node.0 - bandwidth
                     };
-                }
-                else{
+                } else {
                     // normal banding which corrospond to path
                     // get the current lcsk path - bandwidth as start
                     start = if bandwidth > lcsk_path[current_lcsk_path_index].0 {
@@ -776,12 +822,11 @@ impl Poa{
                     // get the next lcsk path + bandwidth as end, if not available use start + 2 * bandwidth
                     if lcsk_path.len() < current_lcsk_path_index + 1 {
                         end = lcsk_path[current_lcsk_path_index + 1].0 + bandwidth;
-                    }
-                    else {
+                    } else {
                         end = lcsk_path[current_lcsk_path_index].0 + bandwidth;
                     }
                 }
-    
+
                 // modify the conditions banding_started, banding ended
                 //println!("start {} end {} current {}", banding_started, banding_ended, current_lcsk_path_index);
                 if banding_ended != true {
@@ -809,7 +854,7 @@ impl Poa{
                 start,
                 end + 1,
             );
-            banded_cell_usage += (end - start) + 1; 
+            banded_cell_usage += (end - start) + 1;
             // query base and its index in the DAG (traceback matrix rows)
             for (query_index, query_base) in query.iter().enumerate().skip(start) {
                 if query_index > end {
@@ -821,8 +866,7 @@ impl Poa{
                     let temp_score;
                     if r == *query_base {
                         temp_score = self.match_score;
-                    }
-                    else {
+                    } else {
                         temp_score = self.mismatch_score;
                     }
                     TracebackCell {
@@ -845,16 +889,14 @@ impl Poa{
                         let temp_score;
                         if r == *query_base {
                             temp_score = self.match_score;
-                        }
-                        else {
+                        } else {
                             temp_score = self.mismatch_score;
                         }
                         max_cell = max(
                             max_cell,
                             max(
                                 TracebackCell {
-                                    score: traceback.get(i_p, j - 1).score
-                                        + temp_score,
+                                    score: traceback.get(i_p, j - 1).score + temp_score,
                                     op: AlignmentOperation::Match(Some((i_p - 1, i - 1))),
                                 },
                                 TracebackCell {
@@ -916,7 +958,12 @@ impl Poa{
         traceback
     }
     // need to convert this to use and ascending topo indices instead topo indices, extra input maybe just the hashmap
-    pub fn custom_banded_threaded_section(&mut self, query: &Vec<u8>, lcsk_path: &Vec<(usize, usize)>, bandwidth: usize) -> Traceback {
+    pub fn custom_banded_threaded_section(
+        &mut self,
+        query: &Vec<u8>,
+        lcsk_path: &Vec<(usize, usize)>,
+        bandwidth: usize,
+    ) -> Traceback {
         assert!(self.graph.node_count() != 0);
         // dimensions of the traceback matrix
         let (m, n) = (self.graph.node_count(), query.len());
@@ -942,7 +989,6 @@ impl Poa{
         }
         //println!("Started here");
         while let Some(node) = topo.next(&self.graph) {
-
             // reference base and index
             let r = self.graph.raw_nodes()[node.index()].weight; // reference base at previous index
             let i = node.index() + 1; // 0 index is for initialization so we start at 1
@@ -958,35 +1004,32 @@ impl Poa{
                 if banding_started == false {
                     //do banding till start_banding_query_node + bandwidth
                     end = start_banding_query_node.0 + bandwidth;
-                }
-                else if banding_ended == true {
+                } else if banding_ended == true {
                     // do banding till till end of table
                     start = if bandwidth > end_banding_query_node.0 {
                         0
                     } else {
                         end_banding_query_node.0 - bandwidth
                     };
-                }
-                else{
+                } else {
                     // normal banding which corrospond to path
                     // get the current lcsk path - bandwidth as start
                     start = if bandwidth > lcsk_path[current_lcsk_path_index].0 {
                         0
                     } else {
-                        //println!("{}", lcsk_path[current_lcsk_path_index].0); 
+                        //println!("{}", lcsk_path[current_lcsk_path_index].0);
                         lcsk_path[current_lcsk_path_index].0 - bandwidth
                     };
                     // get the next lcsk path + bandwidth as end, if not available use start + 2 * bandwidth
                     if lcsk_path.len() < current_lcsk_path_index + 1 {
-                        //println!("{}", lcsk_path[current_lcsk_path_index + 1].0); 
+                        //println!("{}", lcsk_path[current_lcsk_path_index + 1].0);
                         end = lcsk_path[current_lcsk_path_index + 1].0 + bandwidth;
-                    }
-                    else {
-                        //println!("{}", lcsk_path[current_lcsk_path_index].0); 
+                    } else {
+                        //println!("{}", lcsk_path[current_lcsk_path_index].0);
                         end = lcsk_path[current_lcsk_path_index].0 + bandwidth;
                     }
                 }
-    
+
                 // modify the conditions banding_started, banding ended
                 //println!("start {} end {} current {}", banding_started, banding_ended, current_lcsk_path_index);
                 if banding_ended != true {
@@ -1028,8 +1071,7 @@ impl Poa{
                     let temp_score;
                     if r == *query_base {
                         temp_score = self.match_score;
-                    }
-                    else {
+                    } else {
                         temp_score = self.mismatch_score;
                     }
                     TracebackCell {
@@ -1050,20 +1092,18 @@ impl Poa{
                     for prev_node in &prevs {
                         // get the prev_node index in ascending order
                         //println!("Reached here");
-                        let i_p: usize = prev_node.index()+ 1; // index of previous node
+                        let i_p: usize = prev_node.index() + 1; // index of previous node
                         let temp_score;
                         if r == *query_base {
                             temp_score = self.match_score;
-                        }
-                        else {
+                        } else {
                             temp_score = self.mismatch_score;
                         }
                         max_cell = max(
                             max_cell,
                             max(
                                 TracebackCell {
-                                    score: traceback.get(i_p, j - 1).score
-                                        + temp_score,
+                                    score: traceback.get(i_p, j - 1).score + temp_score,
                                     op: AlignmentOperation::Match(Some((i_p - 1, i - 1))),
                                 },
                                 TracebackCell {

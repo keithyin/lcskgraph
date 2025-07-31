@@ -1,22 +1,25 @@
 #![allow(dead_code)]
-mod poa;
-mod lcskgraphefficient;
 mod bit_tree;
-use std::{collections::HashMap, process::exit};
-use petgraph::Direction::Incoming;
-use poa::*;
-use petgraph::visit::{Topo};
+mod lcskgraphefficient;
+mod poa;
+use crate::lcskgraphefficient::{
+    anchoring_lcsk_path_for_threading, better_find_kmer_matches, find_sequence_in_graph,
+    lcskpp_graph,
+};
 use petgraph::graph::NodeIndex;
+use petgraph::visit::Topo;
+use petgraph::Direction::Incoming;
 use petgraph::{Directed, Graph};
-use crate::lcskgraphefficient::{find_sequence_in_graph, better_find_kmer_matches, lcskpp_graph, anchoring_lcsk_path_for_threading};
-use rand::{Rng, SeedableRng, rngs::StdRng};
-use std::time::Instant;
+use poa::*;
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use rust_htslib::{bam, bam::Read};
 use std::env;
-use std::thread;
+use std::fs::read_to_string;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
-use std::fs::read_to_string;
+use std::thread;
+use std::time::Instant;
+use std::{collections::HashMap, process::exit};
 
 const KMER_SIZE: usize = 10;
 const SEQ_LEN: usize = 10000;
@@ -30,7 +33,7 @@ fn main() {
 fn arg_runner() {
     // get the arguments 1. num of threads 2. read bam
     // s for synthetic test p for pacbio test s for subread processing
-    // kmer size band size 
+    // kmer size band size
     let mut synthetic_data = false;
     let mut benchmarking = false; // only valid for pacbio data
     let mut kmer_size: usize = 10;
@@ -71,8 +74,10 @@ fn arg_runner() {
                 benchmarking = true;
                 if let Some(i_string) = args.next() {
                     number_of_iter = match i_string.parse::<usize>() {
-                        Ok(x) => {x},
-                        Err(_) => {panic!("Invalid value for -i")},
+                        Ok(x) => x,
+                        Err(_) => {
+                            panic!("Invalid value for -i")
+                        }
                     }
                 } else {
                     panic!("No value specified for parameter -i");
@@ -81,8 +86,10 @@ fn arg_runner() {
             "-k" => {
                 if let Some(k_string) = args.next() {
                     kmer_size = match k_string.parse::<usize>() {
-                        Ok(x) => {x},
-                        Err(_) => {panic!("Invalid value for -k")},
+                        Ok(x) => x,
+                        Err(_) => {
+                            panic!("Invalid value for -k")
+                        }
                     }
                 } else {
                     panic!("No value specified for parameter -k.");
@@ -91,8 +98,10 @@ fn arg_runner() {
             "-b" => {
                 if let Some(b_string) = args.next() {
                     band_size = match b_string.parse::<usize>() {
-                        Ok(x) => {x},
-                        Err(_) => {panic!("Invalid value for -b")},
+                        Ok(x) => x,
+                        Err(_) => {
+                            panic!("Invalid value for -b")
+                        }
                     }
                 } else {
                     panic!("No value specified for parameter -b");
@@ -101,8 +110,10 @@ fn arg_runner() {
             "-c" => {
                 if let Some(c_string) = args.next() {
                     cut_limit = match c_string.parse::<usize>() {
-                        Ok(x) => {x},
-                        Err(_) => {panic!("Invalid value for -b")},
+                        Ok(x) => x,
+                        Err(_) => {
+                            panic!("Invalid value for -b")
+                        }
                     }
                 } else {
                     panic!("No value specified for parameter -b");
@@ -111,8 +122,10 @@ fn arg_runner() {
             "-l" => {
                 if let Some(l_string) = args.next() {
                     sequence_length = match l_string.parse::<usize>() {
-                        Ok(x) => {x},
-                        Err(_) => {panic!("Invalid value for -l")},
+                        Ok(x) => x,
+                        Err(_) => {
+                            panic!("Invalid value for -l")
+                        }
                     }
                 } else {
                     panic!("No value specified for parameter -l");
@@ -136,7 +149,13 @@ fn arg_runner() {
             panic!("Synthetic data can only be run in benchmarking mode!");
         }
         println!("Benchmarking Synthetic data for {} iterations, sequences of length: {} using k: {} band size: {}", number_of_iter, sequence_length, kmer_size, band_size);
-        run_synthetic_data_benchmark(kmer_size, sequence_length, number_of_iter, band_size, cut_limit);
+        run_synthetic_data_benchmark(
+            kmer_size,
+            sequence_length,
+            number_of_iter,
+            band_size,
+            cut_limit,
+        );
     }
     // check for pacbio and run
     if synthetic_data == false {
@@ -144,49 +163,94 @@ fn arg_runner() {
             if number_of_iter == 0 {
                 panic!("Number of iterations can't be 0 for pacbio data benchmarking!");
             }
-            println!("Benchmarking Pacbio data {} for {} iterations, using k: {} band size: {}", input_bam_path, number_of_iter, kmer_size, band_size);
-            run_pacbio_data_benchmark(kmer_size, number_of_iter, band_size, input_bam_path, cut_limit);
-        }
-        else {
+            println!(
+                "Benchmarking Pacbio data {} for {} iterations, using k: {} band size: {}",
+                input_bam_path, number_of_iter, kmer_size, band_size
+            );
+            run_pacbio_data_benchmark(
+                kmer_size,
+                number_of_iter,
+                band_size,
+                input_bam_path,
+                cut_limit,
+            );
+        } else {
             // check here the file is fa or bam
             let file_extension = input_bam_path.split(".").last().unwrap();
             if file_extension == "bam" {
-                make_output_file_from_subread_bam(kmer_size, band_size, input_bam_path, output_bam_path, cut_limit);
-            }
-            else if file_extension == "fa" {
-                make_output_file_from_subread_fa(kmer_size, band_size, input_bam_path, output_bam_path, cut_limit);
-            }
-            else {
+                make_output_file_from_subread_bam(
+                    kmer_size,
+                    band_size,
+                    input_bam_path,
+                    output_bam_path,
+                    cut_limit,
+                );
+            } else if file_extension == "fa" {
+                make_output_file_from_subread_fa(
+                    kmer_size,
+                    band_size,
+                    input_bam_path,
+                    output_bam_path,
+                    cut_limit,
+                );
+            } else {
                 println!("Unknown input file type!");
             }
         }
     }
 }
 
-fn make_output_file_from_subread_fa(kmer_size: usize, band_size: usize, input_path: String, output_path: String, cut_limit: usize) {
+fn make_output_file_from_subread_fa(
+    kmer_size: usize,
+    band_size: usize,
+    input_path: String,
+    output_path: String,
+    cut_limit: usize,
+) {
     // get all the data from fa file
     let mut current_set = "".to_string();
     let mut temp_read = vec![];
     for (index, line) in read_to_string(&input_path).unwrap().lines().enumerate() {
         if index % 2 != 0 {
             temp_read.push(line.to_string());
-        }
-        else {
+        } else {
             current_set = line.to_string();
         }
     }
     println!("Processing {} depth {}", input_path, temp_read.len());
     let now = Instant::now();
-    process_the_reads_get_consensus_and_save_in_fa (&current_set, temp_read, &output_path, kmer_size, band_size, cut_limit);
+    process_the_reads_get_consensus_and_save_in_fa(
+        &current_set,
+        temp_read,
+        &output_path,
+        kmer_size,
+        band_size,
+        cut_limit,
+    );
     let time = now.elapsed().as_micros() as usize;
     println!("Completed {} elapsed time {}μs", input_path, time);
 }
 
-fn process_the_reads_get_consensus_and_save_in_fa (input_name: &String, input_reads: Vec<String>, output_fa: &String, kmer_size: usize, band_size: usize, _cut_limit: usize) {
-    let mut lcsk_aligner = Aligner::new(2, -2, -2, &input_reads[0].as_bytes().to_vec(), 0, 0, band_size as i32);
+fn process_the_reads_get_consensus_and_save_in_fa(
+    input_name: &String,
+    input_reads: Vec<String>,
+    output_fa: &String,
+    kmer_size: usize,
+    band_size: usize,
+    _cut_limit: usize,
+) {
+    let mut lcsk_aligner = Aligner::new(
+        2,
+        -2,
+        -2,
+        &input_reads[0].as_bytes().to_vec(),
+        0,
+        0,
+        band_size as i32,
+    );
     let mut all_paths: Vec<Vec<usize>> = vec![];
     let mut all_sequences: Vec<Vec<u8>> = vec![];
-    // run lcskpoa with the strings 
+    // run lcskpoa with the strings
     for index in 0..input_reads.len() {
         if index == 0 {
             continue;
@@ -207,7 +271,13 @@ fn process_the_reads_get_consensus_and_save_in_fa (input_name: &String, input_re
         // find the previous read path in graph
         let mut error_index = 0;
         loop {
-            let (error_occured, temp_path, temp_sequence) = find_sequence_in_graph (input_reads[index - 1].as_bytes().to_vec().clone(), &output_graph, &topo_indices, &topo_map, error_index);
+            let (error_occured, temp_path, temp_sequence) = find_sequence_in_graph(
+                input_reads[index - 1].as_bytes().to_vec().clone(),
+                &output_graph,
+                &topo_indices,
+                &topo_map,
+                error_index,
+            );
             if error_index > 10 {
                 break;
             }
@@ -216,14 +286,25 @@ fn process_the_reads_get_consensus_and_save_in_fa (input_name: &String, input_re
                 all_sequences.push(temp_sequence);
                 break;
             }
-            error_index += 1;   
+            error_index += 1;
         }
         // get the lcsk path
         let query = &input_reads[index].as_bytes().to_vec();
-        let (kmer_pos_vec, kmer_path_vec, kmers_previous_node_in_paths, kmer_graph_path) = better_find_kmer_matches(&query, &all_sequences, &all_paths, kmer_size);
-        let (lcsk_path, _lcsk_path_unconverted, _k_new_score) = lcskpp_graph(kmer_pos_vec, kmer_path_vec, kmers_previous_node_in_paths, all_paths.len(), kmer_size, kmer_graph_path, &topo_indices);
+        let (kmer_pos_vec, kmer_path_vec, kmers_previous_node_in_paths, kmer_graph_path) =
+            better_find_kmer_matches(&query, &all_sequences, &all_paths, kmer_size);
+        let (lcsk_path, _lcsk_path_unconverted, _k_new_score) = lcskpp_graph(
+            kmer_pos_vec,
+            kmer_path_vec,
+            kmers_previous_node_in_paths,
+            all_paths.len(),
+            kmer_size,
+            kmer_graph_path,
+            &topo_indices,
+        );
         // poa
-        lcsk_aligner.custom_banded(query, &lcsk_path, band_size).add_to_graph();
+        lcsk_aligner
+            .custom_banded(query, &lcsk_path, band_size)
+            .add_to_graph();
     }
     // get consensus
     let consensus_u8 = lcsk_aligner.consensus();
@@ -242,13 +323,19 @@ fn process_the_reads_get_consensus_and_save_in_fa (input_name: &String, input_re
     }
 }
 
-fn add_new_section_graph_to_full_graph (mut original_graph: POAGraph, section_graph: POAGraph, section_index: usize, mut original_graph_end: usize, section_ends: &Vec<usize>, max_weight: usize) -> (POAGraph, usize) {
+fn add_new_section_graph_to_full_graph(
+    mut original_graph: POAGraph,
+    section_graph: POAGraph,
+    section_index: usize,
+    mut original_graph_end: usize,
+    section_ends: &Vec<usize>,
+    max_weight: usize,
+) -> (POAGraph, usize) {
     // this is the first one
     if section_index == 0 {
         original_graph = section_graph;
         original_graph_end = section_ends[section_index];
-    }
-    else {
+    } else {
         // go through the nodes in the section graph and add them to the original graph
         let section_end_original = section_ends[section_index];
         // add the first node (node 0) and make the connection with original graph end
@@ -260,17 +347,24 @@ fn add_new_section_graph_to_full_graph (mut original_graph: POAGraph, section_gr
                 // add the first node and make the connection
                 let added_node = original_graph.add_node(section_graph.raw_nodes()[0].weight);
                 node_tracker[next_node.index()] = added_node.index();
-                original_graph.add_edge(NodeIndex::new(original_graph_end), added_node, max_weight as i32);
+                original_graph.add_edge(
+                    NodeIndex::new(original_graph_end),
+                    added_node,
+                    max_weight as i32,
+                );
                 break;
             }
         }
         // add nodes while making connections, if the node is the section end save it as original graph end (new one though)
         while let Some(next_node) = topo.next(&section_graph) {
             // final node
-            let added_node = original_graph.add_node(section_graph.raw_nodes()[next_node.index()].weight);
+            let added_node =
+                original_graph.add_node(section_graph.raw_nodes()[next_node.index()].weight);
             node_tracker[next_node.index()] = added_node.index();
             // find the weight between last node and new node in section graph
-            let incoming_nodes: Vec<NodeIndex<usize>> = section_graph.neighbors_directed(next_node, Incoming).collect();
+            let incoming_nodes: Vec<NodeIndex<usize>> = section_graph
+                .neighbors_directed(next_node, Incoming)
+                .collect();
             for incoming_node in incoming_nodes {
                 let mut edges = section_graph.edges_connecting(incoming_node, next_node);
                 let mut incoming_weight = 0;
@@ -279,7 +373,11 @@ fn add_new_section_graph_to_full_graph (mut original_graph: POAGraph, section_gr
                 }
                 // find the incoming node in the original graph!!
                 let original_graph_incoming_node = node_tracker[incoming_node.index()];
-                original_graph.add_edge(NodeIndex::new(original_graph_incoming_node), added_node, incoming_weight);
+                original_graph.add_edge(
+                    NodeIndex::new(original_graph_incoming_node),
+                    added_node,
+                    incoming_weight,
+                );
             }
             if next_node.index() == section_end_original {
                 original_graph_end = added_node.index();
@@ -289,39 +387,54 @@ fn add_new_section_graph_to_full_graph (mut original_graph: POAGraph, section_gr
     (original_graph, original_graph_end)
 }
 
-fn make_output_file_from_subread_bam (kmer_size: usize, band_size: usize, input_path: String, output_path: String, cut_limit: usize) {
+fn make_output_file_from_subread_bam(
+    kmer_size: usize,
+    band_size: usize,
+    input_path: String,
+    output_path: String,
+    cut_limit: usize,
+) {
     let read_file_dir = input_path;
     // get all the data from bam file
     let mut bam = bam::Reader::from_path(&read_file_dir).unwrap();
     let mut current_set = "".to_string();
     let mut temp_read = vec![];
     for record_option in bam.records().into_iter() {
-        match record_option {                                                                                                       
-            Ok(x) => {                                                                                                       
-                let record = x;                                                                                                         
-                let record_set = String::from_utf8(record.qname().to_vec()).unwrap().split("/").collect::<Vec<&str>>()[1].to_string();
+        match record_option {
+            Ok(x) => {
+                let record = x;
+                let record_set = String::from_utf8(record.qname().to_vec())
+                    .unwrap()
+                    .split("/")
+                    .collect::<Vec<&str>>()[1]
+                    .to_string();
                 if current_set == "".to_string() {
                     //println!("Start here");
                     current_set = record_set;
                     temp_read.push(String::from_utf8(record.seq().as_bytes()).unwrap());
                     //println!()
-                }
-                else if current_set == record_set {
+                } else if current_set == record_set {
                     //println!("Just adding read");
                     temp_read.push(String::from_utf8(record.seq().as_bytes()).unwrap());
-                }
-                else {
+                } else {
                     //println!("Read set complete onto the next");
                     // process here
                     println!("Processing read {} depth {}", current_set, temp_read.len());
                     let now = Instant::now();
-                    process_the_reads_get_consensus_and_save_in_fa (&current_set, temp_read, &output_path, kmer_size, band_size, cut_limit);
+                    process_the_reads_get_consensus_and_save_in_fa(
+                        &current_set,
+                        temp_read,
+                        &output_path,
+                        kmer_size,
+                        band_size,
+                        cut_limit,
+                    );
                     let time = now.elapsed().as_micros() as usize;
                     println!("Completed {} time elapsed {}μs", current_set, time);
                     temp_read = vec![String::from_utf8(record.seq().as_bytes()).unwrap()];
                     current_set = record_set;
                 }
-            },
+            }
             Err(_) => {
                 break;
             }
@@ -329,7 +442,16 @@ fn make_output_file_from_subread_bam (kmer_size: usize, band_size: usize, input_
     }
 }
 
-fn lcsk_test_pipeline(reads: Vec<String>, kmer_size: usize, band_size: usize, cut_limit: usize) -> ((usize, usize, usize), (usize, usize, usize), (usize, usize, usize)){
+fn lcsk_test_pipeline(
+    reads: Vec<String>,
+    kmer_size: usize,
+    band_size: usize,
+    cut_limit: usize,
+) -> (
+    (usize, usize, usize),
+    (usize, usize, usize),
+    (usize, usize, usize),
+) {
     //for evaluating varibles
     let normal_stat: (usize, usize, usize); // score time memory
     let lcsk_stat: (usize, usize, usize);
@@ -342,7 +464,9 @@ fn lcsk_test_pipeline(reads: Vec<String>, kmer_size: usize, band_size: usize, cu
     let y = string_vec.pop().unwrap().as_bytes().to_vec();
     let mut original_aligner = Aligner::new(2, -2, -2, &x, 0, 0, band_size as i32);
     for index in 1..string_vec.len() {
-        original_aligner.global(&string_vec[index].as_bytes().to_vec()).add_to_graph();
+        original_aligner
+            .global(&string_vec[index].as_bytes().to_vec())
+            .add_to_graph();
     }
     let output_graph = original_aligner.graph();
     let mut all_paths: Vec<Vec<usize>> = vec![];
@@ -363,7 +487,13 @@ fn lcsk_test_pipeline(reads: Vec<String>, kmer_size: usize, band_size: usize, cu
     for sequence in string_vec.clone() {
         let mut error_index = 0;
         loop {
-            let (error_occured, temp_path, temp_sequence) = find_sequence_in_graph (sequence.as_bytes().to_vec().clone(), output_graph, &topo_indices, &topo_map, error_index);
+            let (error_occured, temp_path, temp_sequence) = find_sequence_in_graph(
+                sequence.as_bytes().to_vec().clone(),
+                output_graph,
+                &topo_indices,
+                &topo_map,
+                error_index,
+            );
             if error_index > 10 {
                 break;
             }
@@ -373,19 +503,30 @@ fn lcsk_test_pipeline(reads: Vec<String>, kmer_size: usize, band_size: usize, cu
                 break;
             }
             error_index += 1;
-            
         }
     }
     // LCSK PATH
     let now = Instant::now();
-    let (kmer_pos_vec, kmer_path_vec, kmers_previous_node_in_paths, kmer_graph_path) = better_find_kmer_matches(&y, &all_sequences, &all_paths, kmer_size);
-    let (lcsk_path, lcsk_path_unconverted, _k_new_score) = lcskpp_graph(kmer_pos_vec, kmer_path_vec, kmers_previous_node_in_paths, all_paths.len(), kmer_size, kmer_graph_path, &topo_indices);
+    let (kmer_pos_vec, kmer_path_vec, kmers_previous_node_in_paths, kmer_graph_path) =
+        better_find_kmer_matches(&y, &all_sequences, &all_paths, kmer_size);
+    let (lcsk_path, lcsk_path_unconverted, _k_new_score) = lcskpp_graph(
+        kmer_pos_vec,
+        kmer_path_vec,
+        kmers_previous_node_in_paths,
+        all_paths.len(),
+        kmer_size,
+        kmer_graph_path,
+        &topo_indices,
+    );
     only_lcsk_time = now.elapsed().as_micros() as usize;
     //println!("time for lcsk++ {:?}", only_lcsk_time);
     // NORMAL LCSK POA
     let mut lcsk_aligner = original_aligner.clone();
     let now = Instant::now();
-    let score = lcsk_aligner.custom_banded(&y, &lcsk_path, band_size).alignment().score;
+    let score = lcsk_aligner
+        .custom_banded(&y, &lcsk_path, band_size)
+        .alignment()
+        .score;
     let time = now.elapsed().as_micros() as usize;
     let memory = lcsk_aligner.poa.memory_usage as usize;
     lcsk_stat = (score as usize, time + only_lcsk_time, memory);
@@ -395,7 +536,17 @@ fn lcsk_test_pipeline(reads: Vec<String>, kmer_size: usize, band_size: usize, cu
     let mut total_section_memory = 0;
     if lcsk_path.len() > 0 {
         // find the anchors and graph sections (TODO intergrate query section finding in this and sections lcsk path)
-        let (anchors, section_graphs, _node_tracker, section_queries, section_lcsks) = anchoring_lcsk_path_for_threading(&lcsk_path_unconverted, &lcsk_path, 2, output_graph, cut_limit,  y.len(), topo_indices, &y);
+        let (anchors, section_graphs, _node_tracker, section_queries, section_lcsks) =
+            anchoring_lcsk_path_for_threading(
+                &lcsk_path_unconverted,
+                &lcsk_path,
+                2,
+                output_graph,
+                cut_limit,
+                y.len(),
+                topo_indices,
+                &y,
+            );
         for anchor_index in 0..anchors.len() - 1 {
             let section_query = section_queries[anchor_index].clone();
             let section_lcsk = section_lcsks[anchor_index].clone();
@@ -403,7 +554,10 @@ fn lcsk_test_pipeline(reads: Vec<String>, kmer_size: usize, band_size: usize, cu
             //println!("section query len {} section graph len {}", section_query.len(), section_graph.node_count());
             children.push(thread::spawn(move || {
                 let mut aligner = Aligner::empty(2, -2, -2, 0, 0, band_size as i32);
-                let score = aligner.custom_banded_threaded(&section_query, &section_lcsk, band_size, section_graph).alignment().score;
+                let score = aligner
+                    .custom_banded_threaded(&section_query, &section_lcsk, band_size, section_graph)
+                    .alignment()
+                    .score;
                 let memory = aligner.poa.memory_usage as usize;
                 (score, memory)
             }));
@@ -418,7 +572,11 @@ fn lcsk_test_pipeline(reads: Vec<String>, kmer_size: usize, band_size: usize, cu
         //println!("total section score {}", total_section_score);
     }
     let elapsed = now.elapsed();
-    threaded_stat = (total_section_score as usize, elapsed.as_micros() as usize + only_lcsk_time, total_section_memory as usize);
+    threaded_stat = (
+        total_section_score as usize,
+        elapsed.as_micros() as usize + only_lcsk_time,
+        total_section_memory as usize,
+    );
     // NORMAL POA
     let now = Instant::now();
     let score = original_aligner.semiglobal(&y).alignment().score as usize;
@@ -445,11 +603,17 @@ fn help() {
     exit(0x0100);
 }
 
-fn run_pacbio_data_benchmark (kmer_size: usize, num_of_iter: usize, band_size: usize, input_path: String, cut_limit: usize) {
+fn run_pacbio_data_benchmark(
+    kmer_size: usize,
+    num_of_iter: usize,
+    band_size: usize,
+    input_path: String,
+    cut_limit: usize,
+) {
     //println!("Processing Pacbio Data");
     let read_file_dir = input_path;
     // get data from bam file
-    // get all the data from fa file    
+    // get all the data from fa file
     //let mut bam = bam::Reader::from_path(&read_file_dir).unwrap();
     let mut read_set = vec![];
     let mut temp_read = vec![];
@@ -469,52 +633,148 @@ fn run_pacbio_data_benchmark (kmer_size: usize, num_of_iter: usize, band_size: u
     let mut threaded_sum = (0, 0, 0);
     let mut lcsk_sum = (0, 0, 0);
     for (index, reads) in read_set.iter().enumerate() {
-        println!("Progress {:.2}%", ((index * 100) as f32 / num_of_iter as f32));
+        println!(
+            "Progress {:.2}%",
+            ((index * 100) as f32 / num_of_iter as f32)
+        );
         let string_vec = reads.clone();
-        let (normal, lcsk, threaded) = lcsk_test_pipeline(string_vec, kmer_size, band_size, cut_limit);
+        let (normal, lcsk, threaded) =
+            lcsk_test_pipeline(string_vec, kmer_size, band_size, cut_limit);
         // print current seed results
-        normal_sum = (normal_sum.0 + normal.0, normal_sum.1 + normal.1, normal_sum.2 + normal.2);
-        lcsk_sum = (lcsk_sum.0 + lcsk.0, lcsk_sum.1 + lcsk.1, lcsk_sum.2 + lcsk.2);
-        threaded_sum = (threaded_sum.0 + threaded.0, threaded_sum.1 + threaded.1, threaded_sum.2 + threaded.2);
+        normal_sum = (
+            normal_sum.0 + normal.0,
+            normal_sum.1 + normal.1,
+            normal_sum.2 + normal.2,
+        );
+        lcsk_sum = (
+            lcsk_sum.0 + lcsk.0,
+            lcsk_sum.1 + lcsk.1,
+            lcsk_sum.2 + lcsk.2,
+        );
+        threaded_sum = (
+            threaded_sum.0 + threaded.0,
+            threaded_sum.1 + threaded.1,
+            threaded_sum.2 + threaded.2,
+        );
         println!("Read Number {}", index + 1);
-        println!("Normal poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB", normal.0, normal.1, normal.2);
-        println!("LCSK poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB", lcsk.0, lcsk.1, lcsk.2);
-        println!("Threaded LCSK poa \tScore: {} \tTime: {}μs \tMemory_usage: {}KB", threaded.0, threaded.1, threaded.2);
+        println!(
+            "Normal poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+            normal.0, normal.1, normal.2
+        );
+        println!(
+            "LCSK poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+            lcsk.0, lcsk.1, lcsk.2
+        );
+        println!(
+            "Threaded LCSK poa \tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+            threaded.0, threaded.1, threaded.2
+        );
     }
-    println!("=======================\nSummary Average of {} runs", num_of_iter);
-    println!("Normal poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB", normal_sum.0 / num_of_iter, normal_sum.1 / num_of_iter, normal_sum.2 / num_of_iter);
-    println!("LCSK poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB", lcsk_sum.0 / num_of_iter, lcsk_sum.1 / num_of_iter, lcsk_sum.2 / num_of_iter);
-    println!("Threaded LCSK poa \tScore: {} \tTime: {}μs \tMemory_usage: {}KB", threaded_sum.0 / num_of_iter, threaded_sum.1 / num_of_iter, threaded_sum.2 / num_of_iter);
+    println!(
+        "=======================\nSummary Average of {} runs",
+        num_of_iter
+    );
+    println!(
+        "Normal poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+        normal_sum.0 / num_of_iter,
+        normal_sum.1 / num_of_iter,
+        normal_sum.2 / num_of_iter
+    );
+    println!(
+        "LCSK poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+        lcsk_sum.0 / num_of_iter,
+        lcsk_sum.1 / num_of_iter,
+        lcsk_sum.2 / num_of_iter
+    );
+    println!(
+        "Threaded LCSK poa \tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+        threaded_sum.0 / num_of_iter,
+        threaded_sum.1 / num_of_iter,
+        threaded_sum.2 / num_of_iter
+    );
 }
 
-fn run_synthetic_data_benchmark (kmer_size: usize, sequence_length: usize, num_of_iter: usize, band_size: usize, cut_limit: usize) {
+fn run_synthetic_data_benchmark(
+    kmer_size: usize,
+    sequence_length: usize,
+    num_of_iter: usize,
+    band_size: usize,
+    cut_limit: usize,
+) {
     println!("Processing Synthetic Data");
     let mut normal_sum = (0, 0, 0);
     let mut threaded_sum = (0, 0, 0);
     let mut lcsk_sum = (0, 0, 0);
     for seed in 0..num_of_iter {
-        println!("Progress {:.2}%", ((seed * 100) as f32 / num_of_iter as f32));
+        println!(
+            "Progress {:.2}%",
+            ((seed * 100) as f32 / num_of_iter as f32)
+        );
         let string_vec = get_random_sequences_from_generator(sequence_length, 3, seed);
-        let (normal, lcsk, threaded) = lcsk_test_pipeline(string_vec, kmer_size, band_size, cut_limit);
+        let (normal, lcsk, threaded) =
+            lcsk_test_pipeline(string_vec, kmer_size, band_size, cut_limit);
         // print current seed results
-        normal_sum = (normal_sum.0 + normal.0, normal_sum.1 + normal.1, normal_sum.2 + normal.2);
-        lcsk_sum = (lcsk_sum.0 + lcsk.0, lcsk_sum.1 + lcsk.1, lcsk_sum.2 + lcsk.2);
-        threaded_sum = (threaded_sum.0 + threaded.0, threaded_sum.1 + threaded.1, threaded_sum.2 + threaded.2);
+        normal_sum = (
+            normal_sum.0 + normal.0,
+            normal_sum.1 + normal.1,
+            normal_sum.2 + normal.2,
+        );
+        lcsk_sum = (
+            lcsk_sum.0 + lcsk.0,
+            lcsk_sum.1 + lcsk.1,
+            lcsk_sum.2 + lcsk.2,
+        );
+        threaded_sum = (
+            threaded_sum.0 + threaded.0,
+            threaded_sum.1 + threaded.1,
+            threaded_sum.2 + threaded.2,
+        );
         println!("Seed {}", seed);
-        println!("Normal poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB", normal.0, normal.1, normal.2);
-        println!("LCSK poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB", lcsk.0, lcsk.1, lcsk.2);
-        println!("Threaded LCSK poa \tScore: {} \tTime: {}μs \tMemory_usage: {}KB", threaded.0, threaded.1, threaded.2);
+        println!(
+            "Normal poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+            normal.0, normal.1, normal.2
+        );
+        println!(
+            "LCSK poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+            lcsk.0, lcsk.1, lcsk.2
+        );
+        println!(
+            "Threaded LCSK poa \tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+            threaded.0, threaded.1, threaded.2
+        );
     }
-    println!("=======================\nSummary Average of {} runs", num_of_iter);
-    println!("Normal poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB", normal_sum.0 / num_of_iter, normal_sum.1 / num_of_iter, normal_sum.2 / num_of_iter);
-    println!("LCSK poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB", lcsk_sum.0 / num_of_iter, lcsk_sum.1 / num_of_iter, lcsk_sum.2 / num_of_iter);
-    println!("Threaded LCSK poa \tScore: {} \tTime: {}μs \tMemory_usage: {}KB", threaded_sum.0 / num_of_iter, threaded_sum.1 / num_of_iter, threaded_sum.2 / num_of_iter);
+    println!(
+        "=======================\nSummary Average of {} runs",
+        num_of_iter
+    );
+    println!(
+        "Normal poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+        normal_sum.0 / num_of_iter,
+        normal_sum.1 / num_of_iter,
+        normal_sum.2 / num_of_iter
+    );
+    println!(
+        "LCSK poa \t\tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+        lcsk_sum.0 / num_of_iter,
+        lcsk_sum.1 / num_of_iter,
+        lcsk_sum.2 / num_of_iter
+    );
+    println!(
+        "Threaded LCSK poa \tScore: {} \tTime: {}μs \tMemory_usage: {}KB",
+        threaded_sum.0 / num_of_iter,
+        threaded_sum.1 / num_of_iter,
+        threaded_sum.2 / num_of_iter
+    );
     //io::stdin().read_line(&mut String::new()).unwrap();
 }
 
-fn get_random_sequences_from_generator(sequence_length: usize, num_of_sequences: usize, seed: usize) -> Vec<String> {
+fn get_random_sequences_from_generator(
+    sequence_length: usize,
+    num_of_sequences: usize,
+    seed: usize,
+) -> Vec<String> {
     let mut rng = StdRng::seed_from_u64(seed as u64);
-    //vector to save all the sequences 
+    //vector to save all the sequences
     let mut randomvec: Vec<String> = vec![];
     //generate the first sequence of random bases of length sequence_length
     let mut firstseq: Vec<char> = vec![];
@@ -524,11 +784,11 @@ fn get_random_sequences_from_generator(sequence_length: usize, num_of_sequences:
             1 => 'C',
             2 => 'G',
             3 => 'T',
-            _ => 'X'
+            _ => 'X',
         });
     }
     //randomvec.push(firstseq.iter().collect::<String>());
-    //loop for 10 
+    //loop for 10
     for _ in 0..num_of_sequences {
         //clone the sequence
         let mut mutseq = firstseq.clone();
@@ -541,30 +801,32 @@ fn get_random_sequences_from_generator(sequence_length: usize, num_of_sequences:
                         1 => 'C',
                         2 => 'G',
                         3 => 'T',
-                        _ => 'X'
+                        _ => 'X',
                     }
-                },
+                }
                 _ => {}
             }
         }
-        //put indels at location with chance 0.1 
+        //put indels at location with chance 0.1
         for i in 0..mutseq.len() {
             let mean_value: f64 = 1.5; //2.0 before
-            //get length of the indel geometric distributed mean value 1.5
-            let indel_length: usize  = ((1.0 - rng.gen::<f64>()).ln() / (1.00 - (1.00 / mean_value) as f64).ln()).ceil() as usize;
+                                       //get length of the indel geometric distributed mean value 1.5
+            let indel_length: usize = ((1.0 - rng.gen::<f64>()).ln()
+                / (1.00 - (1.00 / mean_value) as f64).ln())
+            .ceil() as usize;
             match rng.gen_range(0..20) {
                 //insertion of elements
                 0 => {
                     if i + indel_length < mutseq.len() {
-                        for _ in 0..indel_length{
+                        for _ in 0..indel_length {
                             mutseq.insert(i + 1, mutseq[i]);
                         }
                     }
-                },
+                }
                 //deletion of elements
                 1 => {
                     if i + indel_length < mutseq.len() {
-                        for _ in 0..indel_length{
+                        for _ in 0..indel_length {
                             mutseq.remove(i);
                         }
                     }
